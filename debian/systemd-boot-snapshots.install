@@ -1,0 +1,2 @@
+systemd-boot-snapshots.conf             /etc/default
+update-systemd-boot-snapshots           /usr/sbin

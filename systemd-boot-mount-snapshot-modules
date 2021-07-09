@@ -1,0 +1,125 @@
+#!/bin/sh
+
+root_device="$1"
+root_mount="$2"
+root_flags="$3"
+root_fstype="$4"
+parent_subvol="$(sed -n -e 's/.*\(parent_subvol=[^ ]*\).*/\1/; s/parent_subvol=//p' /proc/cmdline)"
+run_dir="/run/systemd-boot-snapshots"
+tmp_dir="/tmp/systemd-boot-snapshots"
+
+trim_whitespace() {
+    local var="$*"
+    var="${var#"${var%%[![:space:]]*}"}"   # remove leading whitespace characters
+    var="${var%"${var##*[![:space:]]}"}"   # remove trailing whitespace characters
+    printf "%s" "$var"
+}
+
+strglobin() {
+    [ -n "$1" -a -z "${1##*$2*}" ]
+}
+
+install_notifier_service()
+{
+    snapshot_type=""
+    if strglobin "$root_flags" "[ ,]subvol=*.snapshots/[0-9]*/snapshot"
+    then
+        snapshot_type="snapper"
+    elif strglobin "$root_flags" "[ ,]subvol=*timeshift-btrfs/snapshots/[0-9][0-9][0-9][0-9]-[0-9]*/*"
+    then
+        snapshot_type="timeshift"
+    fi
+
+    target="graphical-session.target"
+    install_target="xdg-desktop-autostart.target"
+    unit="[Unit]
+Description=Notify user of snapshot mode
+PartOf=$target
+After=$target
+
+[Service]
+Type=exec
+ExecStartPre=/usr/bin/install -D ${run_dir}/systemd-boot-snapshots-notify ${tmp_dir}/systemd-boot-snapshots-notify
+ExecStart=${tmp_dir}/systemd-boot-snapshots-notify $snapshot_type
+Restart=no
+KillMode=process
+Slice=app.slice
+
+[Install]
+WantedBy=$install_target
+"
+    mkdir -p "$run_dir"
+    cp "/bin/systemd-boot-snapshots-notify" "$run_dir"
+    mkdir -p "/run/systemd/user/${install_target}.wants"
+    echo "$unit" > "/run/systemd/user/systemd-boot-snapshots-notify.service"
+    ln -s "/run/systemd/user/systemd-boot-snapshots-notify.service" "/run/systemd/user/${install_target}.wants/systemd-boot-snapshots-notify.service"
+}
+
+if [ $# -ne 4 ]
+then
+    echo "Invalid usage: use systemd-boot-mount-snapshot-modules device mount flags fstype."
+    exit 1
+fi
+
+if type id > /dev/null && [ ! "$(id -u)" -eq 0 ]
+then
+    echo "Please run as root." >&2
+    exit 1
+fi
+
+if [ -z "$parent_subvol" ]
+then
+    echo "No snapshot parent subvolume defined on the kernel command line."
+    exit 1
+fi
+
+if [ "$root_fstype" != "btrfs" ]
+then
+    echo "Only btrfs is supported." >&2
+    exit 1
+fi
+
+kernel_version=$(uname -r)
+if [ -d "${root_mount}/lib/modules/${kernel_version}" ] && [ -f "${root_mount}/lib/modules/${kernel_version}/modules.dep" ]
+then
+    # This kernel version is supported in this snapshot, so do nothing.
+    install_notifier_service
+    exit 0
+fi
+
+mount_path="${run_dir}/root"
+mkdir -p "$mount_path" 2>/dev/null
+mount -o ro "$root_device" "$mount_path"
+
+root_subvol="${root_flags##*subvol=}"
+root_subvol="${root_subvol%%,*}"
+root_subvol="${root_subvol#/}"
+
+if [ "$parent_subvol" = "auto" ]
+then
+    # auto detect parent subvolume defined on the kernel command line.
+    NL='
+'
+    subvol_info="$(btrfs subvolume show "${mount_path}/${root_subvol}")"
+    parent_uuid="${subvol_info##*Parent UUID:}"
+    parent_uuid="${parent_uuid%%Received UUID:*}"
+    parent_uuid="$(trim_whitespace "$parent_uuid")"
+    parent_subvol_info="$(btrfs subvolume show -u "$parent_uuid" "${mount_path}/${root_subvol}")"
+    parent_subvol="${parent_subvol_info%%"$NL"*}"
+    if [ -z "$parent_subvol" ]
+    then
+        # Could not determine the snapshot parent
+        # Now it's not possible to mount the modules
+        # directory from the snapshot parent subvolume
+        umount "$mount_path"
+        echo "Could not determine the snapshot parent subvolume." >&2
+        exit 1
+    fi
+fi
+
+# mount the kernel modules directory.
+mkdir -p "${root_mount}/lib/modules/${kernel_version}" 2>/dev/null
+mount -o ro,bind "${mount_path}/${parent_subvol}/lib/modules/${kernel_version}" "${root_mount}/lib/modules/${kernel_version}"
+umount "$mount_path"
+
+install_notifier_service

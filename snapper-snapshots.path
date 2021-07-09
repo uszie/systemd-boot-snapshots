@@ -1,0 +1,9 @@
+[Unit]
+Description=Monitors for new Snapper snapshots
+
+[Path]
+PathModified=/.snapshots
+Unit=update-systemd-boot-snapshots.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+[Unit]
+Description=Update systemd boot snapshots
+
+[Service]
+Type=oneshot
+ExecStart=update-systemd-boot-snapshots

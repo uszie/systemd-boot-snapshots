@@ -1,0 +1,9 @@
+[Unit]
+Description=Monitors for new boot loader entries
+
+[Path]
+PathModified=/boot/efi/loader/entries
+Unit=update-systemd-boot-snapshots.service
+
+[Install]
+WantedBy=multi-user.target

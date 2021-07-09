@@ -1,0 +1,4 @@
+initramfs-tools/scripts/init-bottom/systemd-boot-snapshots    /usr/share/initramfs-tools/scripts/init-bottom
+initramfs-tools/hooks/systemd-boot-snapshots                  /usr/share/initramfs-tools/hooks
+systemd-boot-mount-snapshot-modules                           /usr/lib/initramfs-tools/bin
+systemd-boot-snapshots-notify                                 /usr/lib/initramfs-tools/bin

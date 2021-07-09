@@ -1,0 +1,5 @@
+systemd-boot-snapshots (0.10) UNRELEASED; urgency=medium
+
+  * Initial Release.
+
+ -- Usarin Heininga <usarinheininga@hotmail.com>  Fri, 09 Jul 2021 15:36:33 +0200

@@ -1,0 +1,4 @@
+#!/usr/bin/dh-exec
+dracut/90systemd-boot-snapshots/*      /usr/lib/dracut/modules.d/90systemd-boot-snapshots
+systemd-boot-mount-snapshot-modules => /usr/lib/dracut/modules.d/90systemd-boot-snapshots/systemd-boot-mount-snapshot-modules.sh
+systemd-boot-snapshots-notify          /usr/lib/dracut/modules.d/90systemd-boot-snapshots

@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+export DH_OPTIONS
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+
+override_dh_installdocs:
+	dh_installdocs $(wildcard TODO) README.md LICENSE
+
+override_dh_installsystemd:
+	dh_installsystemd --name=update-systemd-boot-snapshots
+	dh_installsystemd --name=systemd-boot-entries
+	dh_installsystemd --name=timeshift-snapshots
+	dh_installsystemd --name=snapper-snapshots
+
+%:
+	dh $@

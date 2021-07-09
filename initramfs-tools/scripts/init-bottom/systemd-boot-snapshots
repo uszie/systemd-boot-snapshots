@@ -1,0 +1,25 @@
+#!/bin/sh
+
+PREREQ="overlayroot"
+
+prereqs()
+{
+    echo "${PREREQ}"
+}
+
+case "${1}" in
+prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /scripts/functions
+
+root_fstype="$(get_fstype $ROOT)"
+root_flags="$ROOTFLAGS"
+root_mount="$rootmnt"
+root_device="$ROOT"
+
+systemd-boot-mount-snapshot-modules "$root_device" "$root_mount" "$root_flags" "$root_fstype" > /dev/null
+

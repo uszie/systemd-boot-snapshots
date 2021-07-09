@@ -1,0 +1,77 @@
+#!/bin/sh
+
+set -e
+
+notification_title='Snapshot restore mode'
+notification_icon='dialog-warning'
+notification_header='This is a snapshot session!'
+notification_description='Changes to the system will be discarded after a reboot.\n
+                          Changes to your home folder might be persistent, depending on your configuration.\n
+                          If you want to restore this snapshot permanently, use a snapshot tool like Timeshift or Snapper.'
+tmp_dir="/tmp/systemd-boot-snapshots"
+pid_file="${tmp_dir}/systemd-boot-snapshots-notify.pid"
+
+cleanup() {
+    if [ -f "$pid_file" ]
+    then
+        pid="$(cat $pid_file)"
+        kill "$pid"
+        rm -f "$pid_file"
+    fi
+
+    [ -d "$tmp_dir" ] && rmdir --ignore-fail-on-non-empty "$tmp_dir"
+}
+
+trap cleanup EXIT
+
+snapshot_type="$1"
+action_reply="start_snapshot_program"
+action_button="[]"
+action_program=""
+if [ "$snapshot_type" = "timeshift" ]
+then
+    action_program="timeshift-launcher"
+    action_button="[\"${action_reply}\", \"Start Timeshift\"]"
+elif [ "$snapshot_type" = "snapper" ]
+then
+    action_program="sudo snapper-gui"
+    action_button="[\"${action_reply}\", \"Start Snapper\"]"
+fi
+
+dbus_call_cmd="gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify"
+id=$($dbus_call_cmd -- "$notification_title" '0' "$notification_icon" "$notification_header" "$notification_description" "$action_button" '{"urgency": <byte 2>}' 'int32 -1')
+id="${id%,)}"
+id="${id#(uint32 }"
+
+dbus_expr='\|^[[:space:]]*/org/freedesktop/Notifications:[[:space:]]\+org.freedesktop.Notifications.'
+mkdir -p "$tmp_dir"
+
+# At startup the org.freedesktop.Notifications interface might not be available immediately
+# Keep try'ing for 10 seconds
+for i in {1..10}
+do
+    set +e
+    dbus_monitor_cmd="gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications"
+    {
+        $dbus_monitor_cmd &
+        echo $! >&3;
+    } 3>"$pid_file" |
+    while read -r line
+    do
+        set -e
+        closed_id="$(echo "$line" | sed "${dbus_expr}NotificationClosed[[:space:]]*(uint32[[:space:]]*$id,[[:space:]]*uint32[[:space:]]\+[0-9]\+[[:space:]]*)[[:space:]]*$|!d; s//$id/")"
+        if [ -n "$closed_id" ]
+        then
+            exit
+        fi
+
+        action_id="$(echo "$line" | sed "${dbus_expr}ActionInvoked[[:space:]]*(uint32[[:space:]]*$id,[[:space:]]*'${action_reply}'[[:space:]]*)[[:space:]]*$|!d; s//$id/")"
+        if [ -n "$action_id" ]
+        then
+            nohup $action_program > /dev/null &
+            break
+        fi
+    done
+
+    sleep 1
+done

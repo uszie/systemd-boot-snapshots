@@ -1,0 +1,54 @@
+Source: systemd-boot-snapshots
+Section: admin
+Priority: optional
+Maintainer: Usarin Heininga <usarinheininga@hotmail.com>
+Build-Depends: dh-exec, debhelper-compat (= 12)
+Standards-Version: 4.5.1
+Homepage: https://github.com/uszie/systemd-boot-snapshots
+Vcs-Browser: https://github.com/uszie/systemd-boot-snapshots
+Vcs-Git: https://github.com/uszie/systemd-boot-snapshots.git
+Rules-Requires-Root: no
+
+Package: systemd-boot-snapshots
+Architecture: all
+Depends: systemd,
+         ${misc:Depends}
+Recommends: kernelstub,
+            systemd-boot-snapshots-initramfs | systemd-boot-snapshots-dracut
+Suggests: timeshift, snapper
+Description: Improves systemd-boot by adding filesystem snapshots to the boot menu.
+ When a new btrfs snapshot is made,
+ the systemd boot menu will be updated with the new snapshot.
+ At boot time it's now possible to boot to an earlier state,
+ in case of a system failure or failed update.
+
+Package: systemd-boot-snapshots-initramfs
+Architecture: all
+Depends: initramfs-tools,
+         overlayroot,
+         libglib2.0-bin,
+         ${misc:Depends}
+Description: Mount the snapshot parent modules folder during boot.
+ This is the initramfs component for using
+ systemd-boot-snapshots.
+ Since systemd-boot boots from the esp partition,
+ there is a change the snapshot doesn't contain
+ modules for the booted kernel.
+ In this case the initramfs will mount the
+ modules directory from the default subvolume
+ to the /lib/modules folder from the snapshot.
+
+Package: systemd-boot-snapshots-dracut
+Architecture: all
+Depends: dracut,
+         libglib2.0-bin,
+         ${misc:Depends}
+Description: Mount the snapshot parent modules folder during boot.
+ This is the dracut component for using
+ systemd-boot-snapshots.
+ Since systemd-boot boots from the esp partition,
+ there is a change the snapshot doesn't contain
+ modules for the booted kernel.
+ In this case the initramfs will mount the
+ modules directory from the default subvolume
+ to the /lib/modules folder from the snapshot.
