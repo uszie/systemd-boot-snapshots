@@ -34,7 +34,7 @@ then
     action_button="[\"${action_reply}\", \"Start Timeshift\"]"
 elif [ "$snapshot_type" = "snapper" ]
 then
-    action_program="sudo snapper-gui"
+    action_program="pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" snapper-gui"
     action_button="[\"${action_reply}\", \"Start Snapper\"]"
 fi
 
