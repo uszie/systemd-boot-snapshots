@@ -1,9 +1,13 @@
 [Unit]
 Description=Monitors for new boot loader entries
+DefaultDependencies=no
+Requires=boot-efi.mount
+After=boot-efi.mount
+BindsTo=boot-efi.mount
 
 [Path]
 PathModified=/boot/efi/loader/entries
 Unit=update-systemd-boot-snapshots.service
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=boot-efi.mount
