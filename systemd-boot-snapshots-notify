@@ -38,23 +38,30 @@ then
     action_button="[\"${action_reply}\", \"Start Snapper\"]"
 fi
 
+dbus_call_cmd="gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify"
+
 # At startup the org.freedesktop.Notifications interface might not be available immediately
 # Keep try'ing for 10 seconds
-for i in {1..10}
+for i in  $(seq 1 10)
 do
     set +e
 
-    dbus_call_cmd="gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify"
     id=$($dbus_call_cmd -- "$notification_title" '0' "$notification_icon" "$notification_header" "$notification_description" "$action_button" '{"urgency": <byte 2>}' 'int32 -1')
-    if [ "$?" -ne 0 ]
+    if [ "$?" -eq 0 ]
     then
-        sleep 1
-        continue
+        break
     fi
+
+    sleep 1
 done
 
 id="${id%,)}"
 id="${id#(uint32 }"
+if [ -z "${id##*[!0-9]*}" ]
+then
+    echo "Failed to send notification to org.freedesktop.Notifications.Notify"
+    exit 1
+fi
 
 dbus_expr='\|^[[:space:]]*/org/freedesktop/Notifications:[[:space:]]\+org.freedesktop.Notifications.'
 mkdir -p "$tmp_dir"

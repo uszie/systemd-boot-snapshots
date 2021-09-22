@@ -7,4 +7,3 @@ Unit=update-systemd-boot-snapshots.service
 
 [Install]
 WantedBy=multi-user.target
-
