@@ -5,9 +5,9 @@ set -e
 notification_title='Snapshot restore mode'
 notification_icon='dialog-warning'
 notification_header='This is a snapshot session!'
-notification_description='Changes to the system will be discarded after a reboot.\n
-                          Changes to your home folder might be persistent, depending on your configuration.\n
-                          If you want to restore this snapshot permanently, use a snapshot tool like Timeshift or Snapper.'
+notification_description='Changes to the system will be discarded after a reboot.
+Changes to your home folder might be persistent, depending on your configuration.
+If you want to restore this snapshot permanently, use a snapshot tool like Timeshift or Snapper.'
 tmp_dir="/tmp/systemd-boot-snapshots"
 pid_file="${tmp_dir}/systemd-boot-snapshots-notify.pid"
 
