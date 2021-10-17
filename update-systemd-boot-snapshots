@@ -243,7 +243,7 @@ then
     exit 1
 fi
 
-if strglob "$current_boot_entry" 'Ubuntu-snapshot[0-9]*.conf'
+if strglob "$current_boot_entry" "${os_name}-snapshot[0-9]*.conf"
 then
     echo "The system is booted into a snapshot, it's not safe to update now, exiting" >&2
     exit 1
@@ -252,7 +252,7 @@ fi
 for old_entry in "${loader_entries_path}"/*
 do
     [ -f "$old_entry" ] || continue
-    strglob "$old_entry" '*/Ubuntu-snapshot[0-9]*.conf' || continue;
+    strglob "$old_entry" "*/${os_name}-snapshot[0-9]*.conf" || continue;
     rm -f "$old_entry"
 done
 
