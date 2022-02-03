@@ -1,6 +1,5 @@
 [Unit]
 Description=Update systemd boot snapshots
-DefaultDependencies=no
 Before=shutdown.target sleep.target
 
 [Service]

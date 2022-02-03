@@ -1,5 +1,11 @@
+systemd-boot-snapshots (0.11) UNRELEASED; urgency=medium
+
+  * Initial Release. update-systemd-boot-snapshots.service: Use default dependencies
+
+ -- Usarin Heininga <usarinheininga@hotmail.com>  Thu, 03 Feb 2022 11:44:10 +0100
+
 systemd-boot-snapshots (0.10) UNRELEASED; urgency=medium
 
   * Initial Release.
 
- -- Usarin Heininga <usarinheininga@hotmail.com>  Fri, 09 Jul 2021 15:36:33 +0200
+ -- Usarin Heininga <usarinheininga@hotmail.com>  Thu, 03 Feb 2022 11:44:10 +0100
