@@ -1,14 +1,6 @@
-#!/bin/sh
-
-# shellcheck disable=SC2039
-# shellcheck disable=SC2166
+#!/bin/bash
 
 . /etc/default/systemd-boot-snapshots.conf
-
-if [ "$1" = "--shck" ]
-then
-    /usr/bin/shellcheck -x "./${0##*/}"
-fi
 
 timeshift_mount="/run/timeshift/backup"
 timeshift_subfolder="timeshift-btrfs/snapshots"
@@ -19,300 +11,278 @@ NL='
 date_format="+%b %d %Y %H:%M"
 
 cleanup() {
-    if [ -n "$mount_dir" ]
-    then
-        umount "$mount_dir"
-        rmdir "$mount_dir"
-    fi
+	if [ -n "$mount_dir" ]; then
+		umount "$mount_dir"
+		rmdir "$mount_dir"
+	fi
 }
 
 trap cleanup EXIT
 
-timeshift --list > /dev/null  2>&1 #Make sure the snapshot folder is mounted
+timeshift --list >/dev/null 2>&1 #Make sure the snapshot folder is mounted
 
 splitsep() {
-    # shellcheck disable=SC2039
-    local sep="$1"
-    local str="$2"
-    shift 2
-    local tmp
+	local sep="$1"
+	local str="$2"
+	shift 2
+	local tmp
 
-    # shellcheck disable=SC2166
-    while [ -n "$str" -a "$#" -gt 1 ]; do
-        tmp="${str%%$sep*}"
-        eval "$1="'${tmp}'""
-        str="${str#"$tmp"}"
-        str="${str#$sep}"
-        shift
-    done
-    [ -n "$str" -a -n "$1" ] && eval "$1="'$str'""
-    return 0
+	while [ -n "$str" ] && [ "$#" -gt 1 ]; do
+		# shellcheck disable=SC2295
+		tmp="${str%%$sep*}"
+		eval "$1="'${tmp}'""
+		str="${str#"$tmp"}"
+		# shellcheck disable=SC2295
+		str="${str#$sep}"
+		shift
+	done
+
+	[ -n "$str" ] && [ -n "$1" ] && eval "$1="'$str'""
+
+	return 0
 }
 
 # returns OK if $1 contains literal string $2 (and isn't empty)
 strstr() {
-    [ "${1##*"$2"*}" != "$1" ]
+	[ "${1##*"$2"*}" != "$1" ]
 }
 
 # returns OK if $1 matches (completely) glob pattern $2
 # An empty $1 will not be considered matched, even if $2 is * which technically
 # matches; as it would match anything, it's not an interesting case.
 strglob() {
-    [ -n "$1" -a -z "${1##$2}" ]
+	# shellcheck disable=SC2295
+	[ -n "$1" ] && [ -z "${1##$2}" ]
 }
 
 # returns OK if $1 contains (anywhere) a match of glob pattern $2
 # An empty $1 will not be considered matched, even if $2 is * which technically
 # matches; as it would match anything, it's not an interesting case.
 strglobin() {
-    [ -n "$1" -a -z "${1##*$2*}" ]
+	# shellcheck disable=SC2295
+	[ -n "$1" ] && [ -z "${1##*$2*}" ]
 }
 
 str_replace() {
-    local in="$1"
-    local s="$2"
-    local r="$3"
-    local out=''
+	local in="$1"
+	local s="$2"
+	local r="$3"
+	local out=''
 
-    while strstr "${in}" "$s"; do
-        chop="${in%%"$s"*}"
-        out="${out}${chop}$r"
-        in="${in#*"$s"}"
-    done
+	while strstr "${in}" "$s"; do
+		chop="${in%%"$s"*}"
+		out="${out}${chop}$r"
+		in="${in#*"$s"}"
+	done
 
-    eval "$4="'${out}${in}'""
+	eval "$4="'${out}${in}'""
 }
 
 get_root_partition() {
-    btrfs filesystem show / | grep path | sed 's/.*path *//'
+	btrfs filesystem show / | grep path | sed 's/.*path *//'
 }
 
 get_tmp_folder() {
-    mktemp -d
+	mktemp -d
 }
 
 get_property() {
-    local input=""
-    if [ -z "$4" ]
-    then
-        if [ -z "$1" ]
-        then
-            echo "$1 not set! Using $1=$3" >&2
-            echo "$3"
-            return
-        fi
+	local input=""
+	if [ -z "$4" ]; then
+		if [ -z "$1" ]; then
+			echo "$1 not set! Using $1=$3" >&2
+			echo "$3"
+			return
+		fi
 
-        eval input="$1=\$$1"
-    elif [ ! -f "$4" ]
-    then
-        echo "$4 not found! Using $1=$3" >&2
-        echo "$3"
-        return
-    else
-        input=$(cat "$4")
-    fi
+		eval input="$1=\$$1"
+	elif [ ! -f "$4" ]; then
+		echo "$4 not found! Using $1=$3" >&2
+		echo "$3"
+		return
+	else
+		input=$(cat "$4")
+	fi
 
-    param_value=$(echo "$input" | sed '/^\#/d' | grep "$1" | tail -n 1 |\
-    cut -d "=" -f2- | sed 's/^[[:space:]]*"\?[[:space:]]*//;s/[[:space:]]*"\?[[:space:]]*$//; s/.*/\L&/')
-    if [ -z "$param_value" ]
-    then
-        #parameter not set return default
-        echo "$3"
-        return
-    fi
+	param_value=$(echo "$input" | sed '/^\#/d' | grep "$1" | tail -n 1 |
+		cut -d "=" -f2- | sed 's/^[[:space:]]*"\?[[:space:]]*//;s/[[:space:]]*"\?[[:space:]]*$//; s/.*/\L&/')
+	if [ -z "$param_value" ]; then
+		#parameter not set return default
+		echo "$3"
+		return
+	fi
 
-    if { [ "$2" = "boolean" ] && [ "$param_value" != true ] && [ "$param_value" != false ]; } || \
-       { [ "$2" = "integer" ] && ! echo "$param_value" | grep -q -E '^[-+]?[1-9]+$'; } || \
-       { [ "$2" = "string" ] && [ "$param_value" = "" ]; }
-    then
-        echo "Wrong paramater in $1 ($param_value). Using $1=$3" >&2
-        param_value="$3"
-    fi
+	if { [ "$2" = "boolean" ] && [ "$param_value" != true ] && [ "$param_value" != false ]; } ||
+		{ [ "$2" = "integer" ] && ! echo "$param_value" | grep -q -E '^[-+]?[1-9]+$'; } ||
+		{ [ "$2" = "string" ] && [ "$param_value" = "" ]; }; then
+		echo "Wrong paramater in $1 ($param_value). Using $1=$3" >&2
+		param_value="$3"
+	fi
 
-    echo "$param_value"
+	echo "$param_value"
 }
 
-has_timeshift()
-{
-    type timeshift >/dev/null 2>&1
+has_timeshift() {
+	type timeshift >/dev/null 2>&1
 }
 
-has_snapper()
-{
-    type snapper >/dev/null 2>&1
+has_snapper() {
+	type snapper >/dev/null 2>&1
 }
 
-get_timeshift_snapshots()
-{
-    has_timeshift || return 1
+get_timeshift_snapshots() {
+	has_timeshift || return 1
 
-    local _snapshot_date; local _snapshot_info; local _folder; local _folder_name
-    for _folder in "${timeshift_snapshots_path}"/*
-    do
-        [ -e "$_folder" ] || continue
-        _folder_name="${_folder##*/}"
-        _snapshot_date="$(format_date "$(echo "$_folder_name" | sed 's/ .*//g; s/_/ /; s/-/:/4; s/-/:/3')")" # " Fix syntax highlighting
-        _snapshot_info="$(cat "${_folder}/info.json")"
-        if [ "${_snapshot_info%type*btrfs*}" != "$_snapshot_info" ]
-        then
-            echo "$_snapshot_info" | grep "comments\|tags" | sort -r | \
-            sed 's/[[:space:]]*"\(comments\|tags\)"[[:space:]]*:[[:space:]]*"//g; s/",$//g;' | \
-            sed -e ':a;N;$!ba;' \
-            -e "s/\n/${sep}/g; s/ondemand[[:space:]]*/O/; s/boot[[:space:]]*/B/; \
+	local _snapshot_date
+	local _snapshot_info
+	local _folder
+	local _folder_name
+	for _folder in "${timeshift_snapshots_path}"/*; do
+		[ -e "$_folder" ] || continue
+		_folder_name="${_folder##*/}"
+		_snapshot_date="$(format_date "$(echo "$_folder_name" | sed 's/ .*//g; s/_/ /; s/-/:/4; s/-/:/3')")" # " Fix syntax highlighting
+		_snapshot_info="$(cat "${_folder}/info.json")"
+		if [ "${_snapshot_info%type*btrfs*}" != "$_snapshot_info" ]; then
+			echo "$_snapshot_info" | grep "comments\|tags" | sort -r |
+				sed 's/[[:space:]]*"\(comments\|tags\)"[[:space:]]*:[[:space:]]*"//g; s/",$//g;' |
+				sed -e ':a;N;$!ba;' \
+					-e "s/\n/${sep}/g; s/ondemand[[:space:]]*/O/; s/boot[[:space:]]*/B/; \
             s/hourly[[:space:]]*/H/; s/daily[[:space:]]*/D/; s/weekly[[:space:]]*/W/; s/monthly[[:space:]]*/M/;" -e \
-            "s|^|${timeshift_subfolder}/${_folder_name}/@${sep}$_snapshot_date${sep}|"
-        fi
-    done
+					"s|^|${timeshift_subfolder}/${_folder_name}/@${sep}$_snapshot_date${sep}|"
+		fi
+	done
 }
 
-get_snapper_snapshots()
-{
-    has_snapper || return 1
+get_snapper_snapshots() {
+	has_snapper || return 1
 
-    local _snapshots
-    _snapshots="$(snapper --csvout --separator "$sep" list -a --columns number,subvolume,date,type,description | \
-    sed -e "1d; /${sep}current/d; /[[:digit:]]\+${sep}\/[^${sep}]/d; s|^\([[:digit:]]\+\)${sep}/|.snapshots/\1/snapshot|")"
+	local _snapshots
+	_snapshots="$(snapper --csvout --separator "$sep" list -a --columns number,subvolume,date,type,description |
+		sed -e "1d; /${sep}current/d; /[[:digit:]]\+${sep}\/[^${sep}]/d; s|^\([[:digit:]]\+\)${sep}/|.snapshots/\1/snapshot|")"
 
-    oldIFS="$IFS"
-    IFS="$NL"
+	oldIFS="$IFS"
+	IFS="$NL"
 
-    for _snapshot in $_snapshots
-    do
-        IFS="$oldIFS"
-        local _subvolume; local _date; local _type; local _description
-        splitsep "$sep" "$_snapshot" _subvolume _date _type _description
-        echo "${_subvolume}${sep}$(format_date "$_date")${sep}${_type}${sep}${_description}"
-    done
+	for _snapshot in $_snapshots; do
+		IFS="$oldIFS"
+		local _subvolume
+		local _date
+		local _type
+		local _description
+		splitsep "$sep" "$_snapshot" _subvolume _date _type _description
+		echo "${_subvolume}${sep}$(format_date "$_date")${sep}${_type}${sep}${_description}"
+	done
 
-    IFS="$oldIFS"
+	IFS="$oldIFS"
 }
 
-get_snapshot_info_for_subvol()
-{
-    local _subvol="$1"
-    local _snapshots="$2"
-    local _found
+get_snapshot_info_for_subvol() {
+	local _subvol="$1"
+	local _snapshots="$2"
+	local _found
 
-    shift 2
-    oldIFS="$IFS"
-    IFS="$NL"
+	shift 2
+	oldIFS="$IFS"
+	IFS="$NL"
 
-    for _snapshot in $_snapshots
-    do
-        IFS="$oldIFS"
-        unset "${@#}"
-        splitsep "$sep" "$_snapshot" "${@#}"
-        eval "_found=$""$1"""
-        if [ "$_found" = "$_subvol" ]
-        then
-            return 0
-        fi
-    done
+	for _snapshot in $_snapshots; do
+		IFS="$oldIFS"
+		unset "${@#}"
+		splitsep "$sep" "$_snapshot" "${@#}"
+		eval "_found=$""$1"""
+		if [ "$_found" = "$_subvol" ]; then
+			return 0
+		fi
+	done
 
-    IFS="$oldIFS"
-    unset "${@#}"
+	IFS="$oldIFS"
+	unset "${@#}"
 
-    return 1
+	return 1
 }
 
-format_date()
-{
-    local _date="$1"
-    date -d "$_date" "$date_format"
+format_date() {
+	local _date="$1"
+	date -d "$_date" "$date_format"
 }
 
-if [ ! "$(id -u)" -eq 0 ]
-then
-    echo "Please run as root" >&2
-    exit 1
+if [ ! "$(id -u)" -eq 0 ]; then
+	echo "Please run as root" >&2
+	exit 1
 fi
 
-if ! bootctl is-installed >/dev/null 2>&1
-then
-    echo "Systemd-boot is not installed on this system. Run bootctl install first" >&2
-    exit 1
+if ! bootctl is-installed >/dev/null 2>&1; then
+	echo "Systemd-boot is not installed on this system. Run bootctl install first" >&2
+	exit 1
 fi
 
 os_name=$(grep "^NAME=" /etc/os-release | sed 's/NAME=//; s/"//g')
 esp_path=$(bootctl -p)
 loader_entries_path="${esp_path}/loader/entries"
-current_boot_entry="$(cat /sys/firmware/efi/efivars/LoaderEntrySelected-* 2> /dev/null)"
-if [ -z "$current_boot_entry" ]
-then
-    echo "The system is not booted with systemd-boot, exiting" >&2
-    exit 1
+{ current_boot_entry="$(cat /sys/firmware/efi/efivars/LoaderEntrySelected-*)"; } 2>/dev/null
+if [ -z "$current_boot_entry" ]; then
+	echo "The system is not booted with systemd-boot, exiting" >&2
+	exit 1
 fi
 
-if strglob "$current_boot_entry" "${os_name}-snapshot[0-9]*.conf"
-then
-    echo "The system is booted into a snapshot, it's not safe to update now, exiting" >&2
-    exit 1
+if strglob "$current_boot_entry" "${os_name}-snapshot[0-9]*.conf"; then
+	echo "The system is booted into a snapshot, it's not safe to update now, exiting" >&2
+	exit 1
 fi
 
-for old_entry in "${loader_entries_path}"/*
-do
-    [ -f "$old_entry" ] || continue
-    strglob "$old_entry" "*/${os_name}-snapshot[0-9]*.conf" || continue;
-    rm -f "$old_entry"
+for old_entry in "${loader_entries_path}"/*; do
+	[ -f "$old_entry" ] || continue
+	strglob "$old_entry" "*/${os_name}-snapshot[0-9]*.conf" || continue
+	rm -f "$old_entry"
 done
 
-if [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]
-then
-    loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
-elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]
-then
-    loader_entry="${loader_entries_path}/${os_name}-current.conf"
+if [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
+	loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
+elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
+	loader_entry="${loader_entries_path}/${os_name}-current.conf"
 else
-    loader_entry="$current_boot_entry"
+	loader_entry="$current_boot_entry"
 fi
 
-if [ -z "$loader_entry" ] || [ "$loader_entry" = "${loader_entry%.conf}" ] || [ ! -f "$loader_entry" ]
-then
-    echo "No suitable boot loader entry found. Tried: ${loader_entries_path}/${os_name}-oldkern.conf, ${loader_entries_path}/${os_name}-current.conf, /sys/firmware/efi/efivars/LoaderEntrySelected-*" >&2
-    exit 1
+if [ -z "$loader_entry" ] || [ "$loader_entry" = "${loader_entry%.conf}" ] || [ ! -f "$loader_entry" ]; then
+	echo "No suitable boot loader entry found. Tried: ${loader_entries_path}/${os_name}-oldkern.conf, ${loader_entries_path}/${os_name}-current.conf, /sys/firmware/efi/efivars/LoaderEntrySelected-*" >&2
+	exit 1
 fi
 
 loader_entry_template="$(sed "s/subvol=[^ ,]*/<SUBVOL>/; \
     s/title.*/<TITLE>/; \
-    /^options.*/ s/$/<OPTIONS>/" < "$loader_entry")"
+    /^options.*/ s/$/<OPTIONS>/" <"$loader_entry")"
 
 echo "Creating snapshots based on loader entry: $loader_entry"
 
 show_snapshots_max=$(get_property "SHOW_SNAPSHOTS_MAX" "integer" "99999")
 use_overlayroot=$(get_property "USE_OVERLAYROOT" "boolean" "true")
 snapshot_period_type=$(get_property "SNAPSHOT_PERIOD_TYPE" "string" "all")
-if ! echo "$snapshot_period_type" | grep -q '^all$\|^ondemand$\|^boot$\|^hourly$\|^daily$\|^weekly$\|^monthly$'
-then
-    # shellcheck disable=SC2153
-    echo "Wrong paramater in SNAPSHOT_PERIOD_TYPE ($SNAPSHOT_PERIOD_TYPE). Using SNAPSHOT_PERIOD_TYPE=all" >&2
-    snapshot_period_type="all"
+if ! echo "$snapshot_period_type" | grep -q '^all$\|^ondemand$\|^boot$\|^hourly$\|^daily$\|^weekly$\|^monthly$'; then
+	echo "Wrong paramater in SNAPSHOT_PERIOD_TYPE ($snapshot_period_type). Using SNAPSHOT_PERIOD_TYPE=all" >&2
+	snapshot_period_type="all"
 fi
 
 options=""
-if [ "$use_overlayroot" != "false" ]
-then
-    if type update-initramfs >/dev/null 2>&1
-    then
-        options=" overlayroot=tmpfs:recurse=1"
-    elif type dracut >/dev/null 2>&1
-    then
-        options=" rootovl"
-    fi
+if [ "$use_overlayroot" != "false" ]; then
+	if type update-initramfs >/dev/null 2>&1; then
+		options=" overlayroot=tmpfs:recurse=1"
+	elif type dracut >/dev/null 2>&1; then
+		options=" rootovl"
+	fi
 fi
 
 root_part=$(get_root_partition)
-if [ -z "$root_part" ]
-then
-    echo "Could not find root device for /" >&2
-    exit 1
+if [ -z "$root_part" ]; then
+	echo "Could not find root device for /" >&2
+	exit 1
 fi
 
 mount_dir=$(get_tmp_folder)
 
-if ! mount "$root_part" "$mount_dir" -o "ro" -t btrfs
-then
-    echo "Failed to mount $root_part on $mount_dir"
-    exit 1
+if ! mount "$root_part" "$mount_dir" -o "ro" -t btrfs; then
+	echo "Failed to mount $root_part on $mount_dir"
+	exit 1
 fi
 
 btrfs_subvol_info="$(btrfs subvolume show /)"
@@ -321,51 +291,50 @@ options="$options parent_subvol=$btrfs_parent_subvol"
 #options="$options parent_subvol=auto"
 
 snapshots=$({
-    get_timeshift_snapshots &
-    get_snapper_snapshots &
-    wait;
-});
+	get_timeshift_snapshots &
+	get_snapper_snapshots &
+	wait
+})
 
 btrfs_snapshots=$(
-    btrfs subvolume list -s --sort=-rootid / | awk '{print $14}' |
-    (btrfs subvolume list -sa --sort=-rootid / | awk '{print $14}' |
-    (paste -d '' /dev/fd/3 /dev/fd/4) 4<&0) 3<&0
+	btrfs subvolume list -s --sort=-rootid / | awk '{print $14}' |
+		(btrfs subvolume list -sa --sort=-rootid / | awk '{print $14}' |
+			(paste -d '' /dev/fd/3 /dev/fd/4) 4<&0) 3<&0
 )
 
 i="1"
-for pair in $btrfs_snapshots
-do
-    btrfs_snapshot="${pair%%"<FS_TREE>"*}"
-    btrfs_snapshot_path="${pair##*"<FS_TREE>"}"
+for pair in $btrfs_snapshots; do
+	btrfs_snapshot="${pair%%"<FS_TREE>"*}"
+	btrfs_snapshot_path="${pair##*"<FS_TREE>"}"
 
-    [ "$show_snapshots_max" != "all" ] && [ "$show_snapshots_max" -lt "$i" ] && break # maximum snapshot count reached
+	[ "$show_snapshots_max" != "all" ] && [ "$show_snapshots_max" -lt "$i" ] && break # maximum snapshot count reached
 
-    [ -d "${mount_dir}/${btrfs_snapshot_path}/etc" ] || continue # this is not a root snapshot, so skip
+	[ -d "${mount_dir}/${btrfs_snapshot_path}/etc" ] || continue # this is not a root snapshot, so skip
 
-    [ "$btrfs_snapshot" = "$btrfs_parent_subvol" ] && continue # this is the current/main snapshot, so skip
+	echo "btrfs_snapshot_path" | grep -q "var/lib/docker" && continue
 
-    snapshot_title="$btrfs_snapshot"
-    if has_timeshift || has_snapper
-    then
-        date="", type="", description=""
-        if get_snapshot_info_for_subvol "$btrfs_snapshot" "$snapshots" subvolume date type description
-        then
-            snapshot_title="${date}${description:+ $description}${type:+ $type}"
-        fi
-    fi
+	[ "$btrfs_snapshot" = "$btrfs_parent_subvol" ] && continue # this is the current/main snapshot, so skip
 
-    title_line="title $os_name snapshot: ${snapshot_title}"
-    snapshot_loader_entry="${loader_entries_path}/${os_name}-snapshot${i}.conf"
+	snapshot_title="$btrfs_snapshot"
+	if has_timeshift || has_snapper; then
+		date="", type="", description=""
+		if get_snapshot_info_for_subvol "$btrfs_snapshot" "$snapshots" subvolume date type description; then
+			snapshot_title="${date}${description:+ $description}${type:+ $type}"
+		fi
+	fi
 
-    new=""
-    str_replace "$loader_entry_template" "<TITLE>" "$title_line" new
-    str_replace "$new" "<SUBVOL>" "subvol=${btrfs_snapshot_path}" new
-    str_replace "$new" "<OPTIONS>" "$options" new
-    echo "$new" > "$snapshot_loader_entry"
+	title_line="title $os_name snapshot: ${snapshot_title}"
+	snapshot_loader_entry="${loader_entries_path}/${os_name}-snapshot${i}.conf"
 
-#     echo "Added $btrfs_snapshot with title: $snapshot_title"
+	new=""
+	str_replace "$loader_entry_template" "<TITLE>" "$title_line" new
+	str_replace "$new" "<SUBVOL>" "subvol=${btrfs_snapshot_path}" new
+	str_replace "$new" "<OPTIONS>" "$options" new
+	echo "$new" >"$snapshot_loader_entry"
 
-    i=$((i + 1))
+	#     echo "Added $btrfs_snapshot with title: $snapshot_title"
+
+	i=$((i + 1))
 done
 
 echo "Added $((i - 1)) snapshots to the systemd-boot loader"
