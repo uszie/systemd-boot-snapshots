@@ -236,10 +236,10 @@ for old_entry in "${loader_entries_path}"/*; do
 	rm -f "$old_entry"
 done
 
-if [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
-	loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
-elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
+if [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
 	loader_entry="${loader_entries_path}/${os_name}-current.conf"
+elif [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
+	loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
 else
 	loader_entry="$current_boot_entry"
 fi
