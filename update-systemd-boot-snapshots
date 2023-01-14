@@ -236,12 +236,15 @@ for old_entry in "${loader_entries_path}"/*; do
 	rm -f "$old_entry"
 done
 
-if [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
+if [ -n "$loader_entry" ]; then
+	loader_entry="$current_boot_entry"
+elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
 	loader_entry="${loader_entries_path}/${os_name}-current.conf"
 elif [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
 	loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
 else
-	loader_entry="$current_boot_entry"
+	echo "Could not find a efi boot entry to use as template, exiting"
+	exit 1
 fi
 
 if [ -z "$loader_entry" ] || [ "$loader_entry" = "${loader_entry%.conf}" ] || [ ! -f "$loader_entry" ]; then
