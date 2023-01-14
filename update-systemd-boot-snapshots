@@ -311,7 +311,7 @@ for pair in $btrfs_snapshots; do
 
 	[ -d "${mount_dir}/${btrfs_snapshot_path}/etc" ] || continue # this is not a root snapshot, so skip
 
-	echo "btrfs_snapshot_path" | grep -q "var/lib/docker" && continue
+	echo "$btrfs_snapshot_path" | grep -q "var/lib/docker" && continue
 
 	[ "$btrfs_snapshot" = "$btrfs_parent_subvol" ] && continue # this is the current/main snapshot, so skip
 
