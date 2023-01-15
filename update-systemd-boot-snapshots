@@ -219,7 +219,7 @@ fi
 os_name=$(grep "^NAME=" /etc/os-release | sed 's/NAME=//; s/"//g')
 esp_path=$(bootctl -p)
 loader_entries_path="${esp_path}/loader/entries"
-{ current_boot_entry="$(cat /sys/firmware/efi/efivars/LoaderEntrySelected-*)"; } 2>/dev/null
+{ current_boot_entry="$(cat /sys/firmware/efi/efivars/LoaderEntrySelected-* | tr -dc '\40-\176')"; } 2>/dev/null
 if [ -z "$current_boot_entry" ]; then
 	echo "The system is not booted with systemd-boot, exiting" >&2
 	exit 1
@@ -237,7 +237,7 @@ for old_entry in "${loader_entries_path}"/*; do
 done
 
 if [ -n "$current_boot_entry" ]; then
-	loader_entry="$current_boot_entry"
+	loader_entry="${loader_entries_path}/${current_boot_entry}"
 elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
 	loader_entry="${loader_entries_path}/${os_name}-current.conf"
 elif [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
