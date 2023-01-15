@@ -8,6 +8,8 @@ timeshift_snapshots_path="${timeshift_mount}/${timeshift_subfolder}"
 sep=";"
 NL='
 '
+VERBOSE=0
+
 date_format="+%b %d %Y %H:%M"
 
 cleanup() {
@@ -79,7 +81,16 @@ str_replace() {
 }
 
 get_root_partition() {
-	btrfs filesystem show / | grep path | sed 's/.*path *//'
+	btrfs filesystem show / | grep " path " | sed 's/.* path *//'
+}
+
+get_root_uuid() {
+	sudo btrfs filesystem show / | grep " uuid: " | sed 's/.* uuid: *//'
+}
+
+get_loader_entry_root_uuid() {
+	local _loader_entry="$1"
+	grep -o " root=UUID=[^ ]* " "$_loader_entry" | sed 's/.*root=UUID=//'
 }
 
 get_tmp_folder() {
@@ -216,6 +227,18 @@ if ! bootctl is-installed >/dev/null 2>&1; then
 	exit 1
 fi
 
+root_part=$(get_root_partition)
+if [ -z "$root_part" ]; then
+	echo "Could not find root device for /" >&2
+	exit 1
+fi
+
+root_uuid=$(get_root_uuid)
+if [ -z "$root_uuid" ]; then
+	echo "Could not find root UUID for /" >&2
+	exit 1
+fi
+
 os_name=$(grep "^NAME=" /etc/os-release | sed 's/NAME=//; s/"//g')
 esp_path=$(bootctl -p)
 loader_entries_path="${esp_path}/loader/entries"
@@ -225,38 +248,57 @@ if [ -z "$current_boot_entry" ]; then
 	exit 1
 fi
 
-if strglob "$current_boot_entry" "${os_name}-snapshot[0-9]*.conf"; then
+if strglob "$current_boot_entry" "-snapshot[0-9]*.conf"; then
 	echo "The system is booted into a snapshot, it's not safe to update now, exiting" >&2
 	exit 1
 fi
 
 for old_entry in "${loader_entries_path}"/*; do
-	[ -f "$old_entry" ] || continue
-	strglob "$old_entry" "*/${os_name}-snapshot[0-9]*.conf" || continue
+	[ -r "$old_entry" ] || continue # entry not readable
+
+	# check if it matches the old style file name formatting
+	# remove it if it does
+	if strglob "$old_entry" "*/${os_name}-snapshot[0-9]*.conf"; then
+		[ "$VERBOSE" -eq 0 ] || echo "Removing loader entry $old_entry"
+		rm -f "$old_entry"
+		continue
+	fi
+
+	strglob "$old_entry" "*/*-[0-9]*snapshot.conf" || continue # doesn't match the filename formatting so it's not created by update-systemd-boot-snapshots, skipping
+
+	old_entry_root_uuid="$(get_loader_entry_root_uuid "$old_entry")"
+	[ -n "$old_entry_root_uuid" ] || continue # the UUID of the loader entry is empty, not valid
+
+	[ "$old_entry_root_uuid" != "$root_uuid" ] || continue # the UUID of the root device doesn't match the one in the loader entry, so root filesystem is different
+
+	[ "$VERBOSE" -eq 0 ] || echo "Removing loader entry $old_entry"
 	rm -f "$old_entry"
 done
 
 if [ -n "$current_boot_entry" ]; then
-	loader_entry="${loader_entries_path}/${current_boot_entry}"
+	loader_entry_path="${loader_entries_path}/${current_boot_entry}"
 elif [ -f "${loader_entries_path}/${os_name}-current.conf" ]; then
-	loader_entry="${loader_entries_path}/${os_name}-current.conf"
+	loader_entry_path="${loader_entries_path}/${os_name}-current.conf"
 elif [ -f "${loader_entries_path}/${os_name}-oldkern.conf" ]; then
-	loader_entry="${loader_entries_path}/${os_name}-oldkern.conf"
+	loader_entry_path="${loader_entries_path}/${os_name}-oldkern.conf"
 else
 	echo "Could not find a efi boot entry to use as template, exiting"
 	exit 1
 fi
 
-if [ -z "$loader_entry" ] || [ "$loader_entry" = "${loader_entry%.conf}" ] || [ ! -f "$loader_entry" ]; then
+loader_entry_filename="${loader_entry_path##*/}"
+loader_entry_filename_base="${loader_entry_filename%.conf}"
+
+if [ -z "$loader_entry_path" ] || [ "$loader_entry_path" = "${loader_entry_path%.conf}" ] || [ ! -r "$loader_entry_path" ]; then
 	echo "No suitable boot loader entry found. Tried: ${loader_entries_path}/${os_name}-oldkern.conf, ${loader_entries_path}/${os_name}-current.conf, /sys/firmware/efi/efivars/LoaderEntrySelected-*" >&2
 	exit 1
 fi
 
 loader_entry_template="$(sed "s/subvol=[^ ,]*/<SUBVOL>/; \
-    s/title.*/<TITLE>/; \
-    /^options.*/ s/$/<OPTIONS>/" <"$loader_entry")"
+    s/title.*/& <TITLE_SUFFIX>/; \
+    /^options.*/ s/$/<OPTIONS>/" <"$loader_entry_path")"
 
-echo "Creating snapshots based on loader entry: $loader_entry"
+echo "Creating snapshots based on loader entry: $loader_entry_path"
 
 show_snapshots_max=$(get_property "SHOW_SNAPSHOTS_MAX" "integer" "99999")
 use_overlayroot=$(get_property "USE_OVERLAYROOT" "boolean" "true")
@@ -273,12 +315,6 @@ if [ "$use_overlayroot" != "false" ]; then
 	elif type dracut >/dev/null 2>&1; then
 		options=" rootovl"
 	fi
-fi
-
-root_part=$(get_root_partition)
-if [ -z "$root_part" ]; then
-	echo "Could not find root device for /" >&2
-	exit 1
 fi
 
 mount_dir=$(get_tmp_folder)
@@ -306,6 +342,7 @@ btrfs_snapshots=$(
 )
 
 i="1"
+j="10000000"
 for pair in $btrfs_snapshots; do
 	btrfs_snapshot="${pair%%"<FS_TREE>"*}"
 	btrfs_snapshot_path="${pair##*"<FS_TREE>"}"
@@ -326,18 +363,20 @@ for pair in $btrfs_snapshots; do
 		fi
 	fi
 
-	title_line="title $os_name snapshot: ${snapshot_title}"
-	snapshot_loader_entry="${loader_entries_path}/${os_name}-snapshot${i}.conf"
+	title_suffix="${snapshot_title}"
+	snapshot_loader_entry="${loader_entries_path}/${loader_entry_filename_base}-${j}snapshot.conf"
 
 	new=""
-	str_replace "$loader_entry_template" "<TITLE>" "$title_line" new
+	str_replace "$loader_entry_template" "<TITLE_SUFFIX>" "$title_suffix" new
 	str_replace "$new" "<SUBVOL>" "subvol=${btrfs_snapshot_path}" new
 	str_replace "$new" "<OPTIONS>" "$options" new
+	[ "$VERBOSE" -eq 0 ] || echo "Adding loader entry $snapshot_loader_entry"
 	echo "$new" >"$snapshot_loader_entry"
 
 	#     echo "Added $btrfs_snapshot with title: $snapshot_title"
 
 	i=$((i + 1))
+	j=$((j - 1))
 done
 
 echo "Added $((i - 1)) snapshots to the systemd-boot loader"
