@@ -338,11 +338,10 @@ snapshots=$({
 btrfs_snapshots=$(
 	btrfs subvolume list -s --sort=-rootid / | awk '{print $14}' |
 		(btrfs subvolume list -sa --sort=-rootid / | awk '{print $14}' |
-			(paste -d '' /dev/fd/3 /dev/fd/4) 4<&0) 3<&0
+			(paste -d '' /dev/fd/3 /dev/fd/4) 4<&0) 3<&0 | tac
 )
 
 i="1"
-j="10000000"
 for pair in $btrfs_snapshots; do
 	btrfs_snapshot="${pair%%"<FS_TREE>"*}"
 	btrfs_snapshot_path="${pair##*"<FS_TREE>"}"
@@ -364,7 +363,7 @@ for pair in $btrfs_snapshots; do
 	fi
 
 	title_suffix="${snapshot_title}"
-	snapshot_loader_entry="${loader_entries_path}/${loader_entry_filename_base}-${j}snapshot.conf"
+	snapshot_loader_entry="${loader_entries_path}/${loader_entry_filename_base}-${i}snapshot.conf"
 
 	new=""
 	str_replace "$loader_entry_template" "<TITLE_SUFFIX>" "$title_suffix" new
@@ -376,7 +375,6 @@ for pair in $btrfs_snapshots; do
 	#     echo "Added $btrfs_snapshot with title: $snapshot_title"
 
 	i=$((i + 1))
-	j=$((j - 1))
 done
 
 echo "Added $((i - 1)) snapshots to the systemd-boot loader"
