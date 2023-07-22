@@ -134,11 +134,11 @@ get_property() {
 }
 
 has_timeshift() {
-	type timeshift >/dev/null 2>&1
+	command -v timeshift >/dev/null 2>&1
 }
 
 has_snapper() {
-	type snapper >/dev/null 2>&1
+	command -v snapper >/dev/null 2>&1
 }
 
 get_timeshift_snapshots() {
@@ -310,9 +310,9 @@ fi
 
 options=""
 if [ "$use_overlayroot" != "false" ]; then
-	if type update-initramfs >/dev/null 2>&1; then
+	if command -v update-initramfs >/dev/null 2>&1; then
 		options=" overlayroot=tmpfs:recurse=1"
-	elif type dracut >/dev/null 2>&1; then
+	elif command -v dracut >/dev/null 2>&1; then
 		options=" rootovl"
 	fi
 fi

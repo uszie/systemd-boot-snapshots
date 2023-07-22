@@ -61,7 +61,7 @@ then
     exit 1
 fi
 
-if type id > /dev/null && [ ! "$(id -u)" -eq 0 ]
+if command -v id > /dev/null && [ ! "$(id -u)" -eq 0 ]
 then
     echo "Please run as root." >&2
     exit 1
